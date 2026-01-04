@@ -3,12 +3,14 @@ name = "bear-lake"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 dependencies = [
     "polars>=1.36.1",
+    "pyarrow>=18.1.0",
 ]
 
 [dependency-groups]
 dev = [
+    "pytest>=9.0.2",
     "yfinance>=1.0",
 ]
