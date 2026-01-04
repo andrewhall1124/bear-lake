@@ -88,12 +88,10 @@ class Database:
             else:
                 partition_key_names.append(str(key))
 
+        # create_table_metadata now creates the table directory and metadata.json within it
         self.metadata.create_table_metadata(
             operation.table_name, operation.schema, partition_key_names
         )
-
-        table_path = self._get_table_path(operation.table_name)
-        table_path.mkdir(parents=True, exist_ok=True)
 
     def _execute_drop(self, operation: DropTableOperation) -> None:
         """Execute a DROP TABLE operation."""

@@ -10,11 +10,14 @@ class MetadataManager:
 
     def __init__(self, database_path: str):
         self.database_path = Path(database_path)
-        self.metadata_dir = self.database_path / "_metadata"
-        self.metadata_dir.mkdir(parents=True, exist_ok=True)
+
+    def _get_table_path(self, table_name: str) -> Path:
+        """Get the directory path for a table."""
+        return self.database_path / table_name
 
     def _get_metadata_path(self, table_name: str) -> Path:
-        return self.metadata_dir / f"{table_name}.json"
+        """Get the path to the metadata.json file for a table."""
+        return self._get_table_path(table_name) / "metadata.json"
 
     def _polars_type_to_string(self, dtype: type[pl.DataType]) -> str:
         """Convert Polars data type to string representation."""
@@ -68,6 +71,10 @@ class MetadataManager:
             "created_at": datetime.now().isoformat(),
             "last_modified": datetime.now().isoformat(),
         }
+
+        # Ensure table directory exists
+        table_path = self._get_table_path(table_name)
+        table_path.mkdir(parents=True, exist_ok=True)
 
         metadata_path = self._get_metadata_path(table_name)
         with open(metadata_path, "w") as f:
@@ -138,7 +145,8 @@ class MetadataManager:
 
     def list_tables(self) -> list[str]:
         """List all tables in the database."""
-        return [
-            path.stem
-            for path in self.metadata_dir.glob("*.json")
-        ]
+        tables = []
+        for path in self.database_path.iterdir():
+            if path.is_dir() and (path / "metadata.json").exists():
+                tables.append(path.name)
+        return tables
