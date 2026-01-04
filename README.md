@@ -66,3 +66,9 @@ db.command(
     bl.table("stock_prices").drop()
 )
 ```
+
+## Commands
+
+### Create
+1. Create folders
+2. Create metadata.json file
