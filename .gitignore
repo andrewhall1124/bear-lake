@@ -16,3 +16,6 @@ wheels/
 /data.py
 /test.py
 /database
+
+# Environment Variables
+.env
