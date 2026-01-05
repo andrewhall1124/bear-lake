@@ -16,10 +16,11 @@ class Database:
         table_path = self.path / name
         table_path.mkdir(parents=True, exist_ok=True)
 
-        # Create metadata
+        # Create metadata - serialize schema to strings
+        schema_serialized = {col: str(dtype) for col, dtype in schema.items()}
         metadata = {
             "name": name,
-            "schema": str(schema),
+            "schema": schema_serialized,
             "partition_keys": partition_keys
         }
 
@@ -71,6 +72,54 @@ class Database:
     def drop(self, name: str):
         table_path = self.path / name
         shutil.rmtree(table_path)
+
+    def list_tables(self) -> list[str]:
+        tables = []
+        for item in self.path.iterdir():
+            if item.is_dir() and (item / "metadata.json").exists():
+                tables.append(item.name)
+        return tables
+
+    def get_schema(self, name: str) -> dict[str, pl.DataType]:
+        table_path = self.path / name
+        with open(table_path / "metadata.json", "r") as file:
+            metadata = json.load(file)
+
+        # Deserialize schema strings back to DataTypes
+        schema_str = metadata["schema"]
+        schema = {col: self._deserialize_dtype(dtype_str) for col, dtype_str in schema_str.items()}
+        return schema
+
+    def _deserialize_dtype(self, dtype_str: str) -> pl.DataType:
+        # Map common string representations to Polars DataTypes
+        dtype_map = {
+            "Int8": pl.Int8,
+            "Int16": pl.Int16,
+            "Int32": pl.Int32,
+            "Int64": pl.Int64,
+            "UInt8": pl.UInt8,
+            "UInt16": pl.UInt16,
+            "UInt32": pl.UInt32,
+            "UInt64": pl.UInt64,
+            "Float32": pl.Float32,
+            "Float64": pl.Float64,
+            "Boolean": pl.Boolean,
+            "Utf8": pl.Utf8,
+            "String": pl.String,
+            "Binary": pl.Binary,
+            "Date": pl.Date,
+            "Datetime": pl.Datetime,
+            "Time": pl.Time,
+            "Duration": pl.Duration,
+            "Categorical": pl.Categorical,
+        }
+
+        # Return the DataType if found in map, otherwise try eval as fallback
+        if dtype_str in dtype_map:
+            return dtype_map[dtype_str]
+        else:
+            # For complex types like List, Struct, etc., use eval
+            return eval(dtype_str, {"pl": pl})
 
 def connect(path: str) -> Database:
     global DATABASE_PATH, CONNECTED
