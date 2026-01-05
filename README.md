@@ -4,6 +4,14 @@ A lightweight, file-based database built on [Polars](https://pola.rs/) and Parqu
 
 Bear Lake provides a simple API for creating partitioned tables, inserting data, and running efficient queries using Polars' lazy evaluation. All data is stored as Parquet files with automatic partitioning support.
 
+## Installation
+
+You can install `bear-lake` using `pip`.
+
+```bash
+pip install bear-lake
+```
+
 ## Usage
 
 ### Quick Start
