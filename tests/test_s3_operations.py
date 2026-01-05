@@ -17,9 +17,8 @@ class TestS3InsertOperations:
         s3_db.insert("users", sample_data)
 
         # Verify parquet files were created on S3
-        fs = s3_db._get_fs()
-        table_path = f"{s3_db.path.replace('s3://', '')}/users"
-        parquet_files = fs.glob(f"{table_path}/**/*.parquet")
+        table_path = f"{s3_db.path}/users"
+        parquet_files = s3_db.file_system_client.glob(f"{table_path}/**/*.parquet")
         assert len(parquet_files) > 0
 
     def test_insert_creates_partitions(self, s3_db, sample_schema, sample_data):
@@ -34,14 +33,15 @@ class TestS3InsertOperations:
         s3_db.insert("users", sample_data)
 
         # Check for partition files on S3
-        fs = s3_db._get_fs()
-        table_path = f"{s3_db.path.replace('s3://', '')}/users"
+        table_path = f"{s3_db.path}/users"
 
         # Should have partitions for NYC, LA, SF
         cities = sample_data["city"].unique().to_list()
         for city in cities:
             partition_file = f"{table_path}/{city}.parquet"
-            assert fs.exists(partition_file), f"Partition for {city} not found on S3"
+            assert s3_db.file_system_client.exists(partition_file), (
+                f"Partition for {city} not found on S3"
+            )
 
     def test_insert_append_mode(self, s3_db, sample_schema, sample_data):
         """Test appending data to existing partitions on S3."""
@@ -153,15 +153,14 @@ class TestS3InsertOperations:
         s3_db.insert("users", partitioned_data)
 
         # Verify nested partition structure on S3
-        fs = s3_db._get_fs()
-        table_path = f"{s3_db.path.replace('s3://', '')}/users"
+        table_path = f"{s3_db.path}/users"
 
         # Should have USA directory with city subdirectories
         usa_path = f"{table_path}/USA"
-        assert fs.exists(usa_path)
+        assert s3_db.file_system_client.exists(usa_path)
 
         # Check for parquet files
-        parquet_files = fs.glob(f"{table_path}/**/*.parquet")
+        parquet_files = s3_db.file_system_client.glob(f"{table_path}/**/*.parquet")
         assert len(parquet_files) > 0
 
 
@@ -209,10 +208,9 @@ class TestS3DeleteOperations:
         s3_db.delete("users", pl.col("city") == "SF")
 
         # Verify SF partition file is removed on S3
-        fs = s3_db._get_fs()
-        table_path = f"{s3_db.path.replace('s3://', '')}/users"
+        table_path = f"{s3_db.path}/users"
         sf_partition = f"{table_path}/SF.parquet"
-        assert not fs.exists(sf_partition)
+        assert not s3_db.file_system_client.exists(sf_partition)
 
     def test_delete_all_rows(self, s3_db, sample_schema, sample_data):
         """Test deleting all rows from a table on S3."""
@@ -229,9 +227,8 @@ class TestS3DeleteOperations:
         s3_db.delete("users", pl.col("id") >= 0)
 
         # Verify no parquet files remain on S3
-        fs = s3_db._get_fs()
-        table_path = f"{s3_db.path.replace('s3://', '')}/users"
-        parquet_files = fs.glob(f"{table_path}/**/*.parquet")
+        table_path = f"{s3_db.path}/users"
+        parquet_files = s3_db.file_system_client.glob(f"{table_path}/**/*.parquet")
         assert len(parquet_files) == 0
 
 

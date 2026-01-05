@@ -153,12 +153,14 @@ class TestS3ConnectFunction:
 
     def test_connect_returns_database(self, s3_db_path, s3_storage_options):
         """Test that connect returns a Database instance for S3."""
-        db = connect(s3_db_path, storage_options=s3_storage_options)
         from bear_lake import Database
+        from bear_lake.filesystem_client import S3Client
+
+        db = connect(s3_db_path, storage_options=s3_storage_options)
 
         assert isinstance(db, Database)
         assert db.path == s3_db_path
-        assert db.is_s3 is True
+        assert isinstance(db.file_system_client, S3Client)
 
     def test_connect_sets_global_state(self, s3_db_path, s3_storage_options):
         """Test that connect sets global state for table() function with S3."""

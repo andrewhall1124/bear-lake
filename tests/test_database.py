@@ -10,9 +10,11 @@ class TestDatabaseInitialization:
 
     def test_database_init_local(self, temp_db_path):
         """Test that database initializes correctly for local storage."""
+        from bear_lake.filesystem_client import LocalClient
+
         db = Database(temp_db_path)
         assert db.path == temp_db_path
-        assert db.is_s3 is False
+        assert isinstance(db.file_system_client, LocalClient)
         assert db.storage_options is None
         assert os.path.exists(temp_db_path)
 

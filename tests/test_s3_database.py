@@ -9,9 +9,11 @@ class TestS3DatabaseInitialization:
 
     def test_database_init_s3(self, s3_db_path, s3_storage_options):
         """Test that database initializes correctly for S3 storage."""
+        from bear_lake.filesystem_client import S3Client
+
         db = Database(s3_db_path, storage_options=s3_storage_options)
         assert db.path == s3_db_path
-        assert db.is_s3 is True
+        assert isinstance(db.file_system_client, S3Client)
         assert db.storage_options == s3_storage_options
 
 
@@ -28,12 +30,11 @@ class TestS3TableCreation:
         )
 
         # Verify metadata file exists on S3
-        fs = s3_db._get_fs()
-        metadata_path = f"{s3_db.path.replace('s3://', '')}/users/metadata.json"
-        assert fs.exists(metadata_path)
+        metadata_path = f"{s3_db.path}/users/metadata.json"
+        assert s3_db.file_system_client.exists(metadata_path)
 
         # Verify metadata content
-        with fs.open(metadata_path, "r") as f:
+        with s3_db.file_system_client.open(metadata_path, "r") as f:
             metadata = json.load(f)
 
         assert metadata["name"] == "users"
@@ -103,9 +104,8 @@ class TestS3TableCreation:
         )
 
         # Verify new metadata
-        fs = s3_db._get_fs()
-        metadata_path = f"{s3_db.path.replace('s3://', '')}/users/metadata.json"
-        with fs.open(metadata_path, "r") as f:
+        metadata_path = f"{s3_db.path}/users/metadata.json"
+        with s3_db.file_system_client.open(metadata_path, "r") as f:
             metadata = json.load(f)
 
         assert "email" in metadata["schema"]
@@ -234,13 +234,12 @@ class TestS3DropTable:
         # Verify table exists
         assert "users" in s3_db.list_tables()
 
-        fs = s3_db._get_fs()
-        table_path = f"{s3_db.path.replace('s3://', '')}/users"
-        assert fs.exists(table_path)
+        table_path = f"{s3_db.path}/users"
+        assert s3_db.file_system_client.exists(table_path)
 
         # Drop table
         s3_db.drop("users")
 
         # Verify table is gone
         assert "users" not in s3_db.list_tables()
-        assert not fs.exists(table_path)
+        assert not s3_db.file_system_client.exists(table_path)
