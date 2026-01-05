@@ -57,6 +57,81 @@ result = db.query(
 print(result)
 ```
 
+### S3 Storage
+
+Bear Lake supports storing your database on S3-compatible storage (AWS S3, MinIO, etc.) by providing storage options when connecting.
+
+#### Configuration
+
+First, set up your S3 credentials as environment variables:
+
+```bash
+export ACCESS_KEY_ID="your-access-key"
+export SECRET_ACCESS_KEY="your-secret-key"
+export REGION="us-east-1"
+export ENDPOINT="https://s3.amazonaws.com"  # Optional
+export BUCKET="your-bucket-name"
+```
+
+#### Connecting to S3
+
+```python
+import polars as pl
+import bear_lake as bl
+import os
+
+# Configure storage options
+storage_options = {
+    'aws_access_key_id': os.getenv("ACCESS_KEY_ID"),
+    'aws_secret_access_key': os.getenv("SECRET_ACCESS_KEY"),
+    'region': os.getenv("REGION"),
+    'endpoint_url': os.getenv("ENDPOINT")  # Optional
+}
+
+# Connect to S3 database
+url = f"s3://{os.getenv('BUCKET')}"
+db = bl.connect(path=url, storage_options=storage_options)
+```
+
+#### Usage with S3
+
+Once connected, all database operations work identically to local storage:
+
+```python
+# Create table
+schema = {
+    "date": pl.Date,
+    "ticker": pl.String,
+    "close": pl.Float64
+}
+
+db.create(
+    name="stock_prices",
+    schema=schema,
+    partition_keys=["ticker"],
+    primary_keys=["date", "ticker"],
+    mode="replace"
+)
+
+# Insert data
+data = pl.DataFrame({
+    "date": ["2024-01-01", "2024-01-02"],
+    "ticker": ["AAPL", "AAPL"],
+    "close": [150.0, 152.5]
+})
+
+db.insert("stock_prices", data, mode="append")
+
+# Query data (works the same as local storage)
+result = db.query(
+    bl.table("stock_prices")
+    .filter(pl.col("ticker") == "AAPL")
+    .select(["date", "close"])
+)
+```
+
+All operations including `insert`, `query`, `delete`, `optimize`, and metadata operations work seamlessly with S3 storage.
+
 ### API Reference
 
 #### Database Connection
