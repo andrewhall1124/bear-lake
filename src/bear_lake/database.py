@@ -22,7 +22,7 @@ class Database:
         self,
         name: str,
         schema: dict[str, pl.DataType],
-        partition_keys: list[str],
+        partition_keys: list[str] | None,
         primary_keys: list[str],
         mode: str = "error",
     ) -> None:
@@ -61,54 +61,71 @@ class Database:
             json.dump(metadata, file)
 
     def insert(self, name: str, data: pl.DataFrame, mode: str = "append"):
-        # Get metadata
+        table_path = self._get_table_path(name)
+        metadata = self._read_metadata(name)
+        p_keys = metadata["partition_keys"]
+
+        if not p_keys:
+            self._insert_non_partitioned(name, table_path, data, mode)
+        else:
+            self._insert_partitioned(table_path, data, p_keys, mode)
+
+    def _read_metadata(self, name: str) -> dict:
         table_path = self._get_table_path(name)
         metadata_path = f"{table_path}/metadata.json"
 
         with self.file_system_client.open(metadata_path, "r") as file:
-            metadata = json.load(file)
+            return json.load(file)
 
-        # Iterate over partition groups
-        p_keys = metadata["partition_keys"]
+    def _insert_non_partitioned(
+        self, name: str, table_path: str, data: pl.DataFrame, mode: str
+    ):
+        self.file_system_client.makedirs(table_path)
+        parquet_file = f"{table_path}/{name}.parquet"
+
+        data = self._handle_existing_file(parquet_file, data, mode)
+        data.write_parquet(parquet_file, storage_options=self.storage_options)
+
+    def _insert_partitioned(
+        self, table_path: str, data: pl.DataFrame, p_keys: list[str], mode: str
+    ):
         partition_groups = list(data.group_by(p_keys))
 
         for p_values, group in tqdm(
             partition_groups, desc="Inserting partitions", unit="partition"
         ):
-            # Build file path
-            partition_path = table_path
-            for p_value in p_values:
-                # Create every folder except the last (file name)
-                self.file_system_client.makedirs(partition_path)
-                partition_path = f"{partition_path}/{p_value}"
-
-            # Get final parquet file path
-            parquet_file = f"{partition_path}.parquet"
-
-            # Handle mode
-            file_exists = self.file_system_client.exists(parquet_file)
-
-            if file_exists:
-                if mode == "error":
-                    raise FileExistsError(
-                        f"Partition file '{parquet_file}' already exists"
-                    )
-                elif mode == "append":
-                    # Read existing data and concatenate
-                    existing_df = pl.read_parquet(
-                        parquet_file, storage_options=self.storage_options
-                    )
-                    group = pl.concat([existing_df, group])
-                elif mode == "overwrite":
-                    # Will overwrite below
-                    pass
-                else:
-                    raise ValueError(
-                        f"Invalid mode: '{mode}'. Must be 'append', 'overwrite', or 'error'"
-                    )
-
-            # Write parquet
+            parquet_file = self._build_partition_path(table_path, p_values)
+            group = self._handle_existing_file(parquet_file, group, mode)
             group.write_parquet(parquet_file, storage_options=self.storage_options)
+
+    def _build_partition_path(self, table_path: str, p_values: tuple) -> str:
+        partition_path = table_path
+        for p_value in p_values:
+            self.file_system_client.makedirs(partition_path)
+            partition_path = f"{partition_path}/{p_value}"
+        return f"{partition_path}.parquet"
+
+    def _handle_existing_file(
+        self, parquet_file: str, data: pl.DataFrame, mode: str
+    ) -> pl.DataFrame:
+        file_exists = self.file_system_client.exists(parquet_file)
+
+        if not file_exists:
+            return data
+
+        if mode == "error":
+            raise FileExistsError(f"File '{parquet_file}' already exists")
+        elif mode == "append":
+            existing_df = pl.read_parquet(
+                parquet_file, storage_options=self.storage_options
+            )
+            return pl.concat([existing_df, data])
+        elif mode == "overwrite":
+            return data
+        else:
+            raise ValueError(
+                f"Invalid mode: '{mode}'. Must be 'append', 'overwrite', or 'error'"
+            )
 
     def query(self, expression: pl.LazyFrame) -> pl.DataFrame:
         return expression.collect()
@@ -155,11 +172,7 @@ class Database:
         return tables
 
     def get_schema(self, name: str) -> dict[str, pl.DataType]:
-        table_path = self._get_table_path(name)
-        metadata_path = f"{table_path}/metadata.json"
-
-        with self.file_system_client.open(metadata_path, "r") as file:
-            metadata = json.load(file)
+        metadata = self._read_metadata(name)
 
         # Deserialize schema strings back to DataTypes
         schema_str = metadata["schema"]
@@ -169,31 +182,17 @@ class Database:
         }
         return schema
 
-    def get_partition_keys(self, name: str) -> list[str]:
-        table_path = self._get_table_path(name)
-        metadata_path = f"{table_path}/metadata.json"
-
-        with self.file_system_client.open(metadata_path, "r") as file:
-            metadata = json.load(file)
-
+    def get_partition_keys(self, name: str) -> list[str] | None:
+        metadata = self._read_metadata(name)
         return metadata["partition_keys"]
 
     def get_primary_keys(self, name: str) -> list[str]:
-        table_path = self._get_table_path(name)
-        metadata_path = f"{table_path}/metadata.json"
-
-        with self.file_system_client.open(metadata_path, "r") as file:
-            metadata = json.load(file)
-
+        metadata = self._read_metadata(name)
         return metadata["primary_keys"]
 
     def optimize(self, name: str) -> None:
         table_path = self._get_table_path(name)
-        metadata_path = f"{table_path}/metadata.json"
-
-        # Get metadata
-        with self.file_system_client.open(metadata_path, "r") as file:
-            metadata = json.load(file)
+        metadata = self._read_metadata(name)
 
         # Get all parquet files
         parquet_files = self.file_system_client.glob(f"{table_path}/**/*.parquet")
