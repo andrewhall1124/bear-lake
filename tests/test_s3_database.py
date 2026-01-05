@@ -2,6 +2,7 @@ import pytest
 import polars as pl
 import json
 from bear_lake import Database
+from bear_lake.filesystem_client import S3Client
 
 
 class TestS3DatabaseInitialization:
@@ -9,9 +10,11 @@ class TestS3DatabaseInitialization:
 
     def test_database_init_s3(self, s3_db_path, s3_storage_options):
         """Test that database initializes correctly for S3 storage."""
-        from bear_lake.filesystem_client import S3Client
+        file_system_client = S3Client(s3_storage_options)
 
-        db = Database(s3_db_path, storage_options=s3_storage_options)
+        db = Database(
+            s3_db_path, file_system_client, storage_options=s3_storage_options
+        )
         assert db.path == s3_db_path
         assert isinstance(db.file_system_client, S3Client)
         assert db.storage_options == s3_storage_options

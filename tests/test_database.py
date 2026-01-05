@@ -3,6 +3,7 @@ import polars as pl
 import os
 import json
 from bear_lake import Database
+from bear_lake.filesystem_client import LocalClient
 
 
 class TestDatabaseInitialization:
@@ -10,9 +11,10 @@ class TestDatabaseInitialization:
 
     def test_database_init_local(self, temp_db_path):
         """Test that database initializes correctly for local storage."""
-        from bear_lake.filesystem_client import LocalClient
+        file_system_client = LocalClient()
+        file_system_client.makedirs(temp_db_path)
 
-        db = Database(temp_db_path)
+        db = Database(temp_db_path, file_system_client)
         assert db.path == temp_db_path
         assert isinstance(db.file_system_client, LocalClient)
         assert db.storage_options is None
@@ -21,7 +23,9 @@ class TestDatabaseInitialization:
     def test_database_init_creates_directory(self, temp_db_path):
         """Test that database creates directory if it doesn't exist."""
         new_path = os.path.join(temp_db_path, "new_db")
-        db = Database(new_path)
+        file_system_client = LocalClient()
+        file_system_client.makedirs(new_path)
+        db = Database(new_path, file_system_client)
         assert os.path.exists(new_path)
 
 

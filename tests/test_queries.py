@@ -195,12 +195,19 @@ class TestTableFunction:
     def test_table_function_not_connected(self):
         """Test that table() raises error when not connected."""
         # Reset global state
-        import bear_lake
+        from bear_lake import connection
 
-        bear_lake.CONNECTED = False
+        # Save current state
+        original_connected = connection.CONNECTED
 
-        with pytest.raises(RuntimeError, match="Not connected to database"):
-            table("users")
+        try:
+            connection.CONNECTED = False
+
+            with pytest.raises(RuntimeError, match="Not connected to database"):
+                table("users")
+        finally:
+            # Restore original state
+            connection.CONNECTED = original_connected
 
     def test_table_function_with_filter(self, temp_db_path, sample_schema, sample_data):
         """Test using table() function with filters."""

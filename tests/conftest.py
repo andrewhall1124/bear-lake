@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 from dotenv import load_dotenv
 from bear_lake import Database
+from bear_lake.filesystem_client import LocalClient, S3Client
 
 # Load environment variables from .env file in project root
 project_root = Path(__file__).parent.parent
@@ -25,7 +26,9 @@ def temp_db_path():
 @pytest.fixture
 def db(temp_db_path):
     """Create a Database instance with a temporary path."""
-    return Database(temp_db_path)
+    file_system_client = LocalClient()
+    file_system_client.makedirs(temp_db_path)
+    return Database(temp_db_path, file_system_client)
 
 
 @pytest.fixture
@@ -123,7 +126,8 @@ def s3_db(s3_db_path, s3_storage_options):
     if not all(s3_storage_options.values()):
         pytest.skip("S3 credentials not available in environment variables")
 
-    db = Database(s3_db_path, storage_options=s3_storage_options)
+    file_system_client = S3Client(s3_storage_options)
+    db = Database(s3_db_path, file_system_client, storage_options=s3_storage_options)
     yield db
 
     # Cleanup after test - delete the test directory
