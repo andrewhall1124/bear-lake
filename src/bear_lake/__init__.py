@@ -11,9 +11,24 @@ class Database:
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
 
-    def create(self, name: str, schema: dict[str, pl.DataType], partition_keys: list[str]) -> None:
+    def _get_table_path(self, name: str) -> Path:
+        return self.path / name
+
+    def create(self, name: str, schema: dict[str, pl.DataType], partition_keys: list[str], primary_keys: list[str], mode: str = "error") -> None:
+        table_path = self._get_table_path(name)
+
+        # Handle existing table based on mode
+        if table_path.exists():
+            if mode == "error":
+                raise FileExistsError(f"Table '{name}' already exists")
+            elif mode == "skip":
+                return
+            elif mode == "replace":
+                shutil.rmtree(table_path)
+            else:
+                raise ValueError(f"Invalid mode: '{mode}'. Must be 'error', 'replace', or 'skip'")
+
         # Create table folders
-        table_path = self.path / name
         table_path.mkdir(parents=True, exist_ok=True)
 
         # Create metadata - serialize schema to strings
@@ -21,16 +36,17 @@ class Database:
         metadata = {
             "name": name,
             "schema": schema_serialized,
-            "partition_keys": partition_keys
+            "partition_keys": partition_keys,
+            "primary_keys": primary_keys
         }
 
         # Write metadata file
         with open(table_path / "metadata.json", "w") as file:
             json.dump(metadata, file)
 
-    def insert(self, name: str, data: pl.DataFrame):
+    def insert(self, name: str, data: pl.DataFrame, mode: str = "append"):
         # Get metadata
-        table_path = self.path / name
+        table_path = self._get_table_path(name)
         with open(table_path / "metadata.json", "r") as file:
             metadata = json.load(file)
 
@@ -45,14 +61,31 @@ class Database:
                 partition_path.mkdir(parents=True, exist_ok=True)
                 partition_path = partition_path / str(p_value)
 
+            # Get final parquet file path
+            parquet_file = partition_path.with_suffix(".parquet")
+
+            # Handle mode
+            if parquet_file.exists():
+                if mode == "error":
+                    raise FileExistsError(f"Partition file '{parquet_file}' already exists")
+                elif mode == "append":
+                    # Read existing data and concatenate
+                    existing_df = pl.read_parquet(parquet_file)
+                    group = pl.concat([existing_df, group])
+                elif mode == "overwrite":
+                    # Will overwrite below
+                    pass
+                else:
+                    raise ValueError(f"Invalid mode: '{mode}'. Must be 'append', 'overwrite', or 'error'")
+
             # Write parquet
-            group.write_parquet(partition_path.with_suffix(".parquet"))
+            group.write_parquet(parquet_file)
     
     def query(self, expression: pl.LazyFrame) -> pl.DataFrame:
         return expression.collect()
     
     def delete(self, name: str, expression: pl.Expr):
-        table_path = self.path / name
+        table_path = self._get_table_path(name)
         parquet_files = list(table_path.rglob("*.parquet"))
 
         for file_path in parquet_files:
@@ -70,7 +103,7 @@ class Database:
                 file_path.unlink()
 
     def drop(self, name: str):
-        table_path = self.path / name
+        table_path = self._get_table_path(name)
         shutil.rmtree(table_path)
 
     def list_tables(self) -> list[str]:
@@ -81,7 +114,7 @@ class Database:
         return tables
 
     def get_schema(self, name: str) -> dict[str, pl.DataType]:
-        table_path = self.path / name
+        table_path = self._get_table_path(name)
         with open(table_path / "metadata.json", "r") as file:
             metadata = json.load(file)
 
@@ -89,6 +122,44 @@ class Database:
         schema_str = metadata["schema"]
         schema = {col: self._deserialize_dtype(dtype_str) for col, dtype_str in schema_str.items()}
         return schema
+
+    def get_partition_keys(self, name: str) -> list[str]:
+        table_path = self._get_table_path(name)
+        with open(table_path / "metadata.json", "r") as file:
+            metadata = json.load(file)
+        return metadata["partition_keys"]
+
+    def get_primary_keys(self, name: str) -> list[str]:
+        table_path = self._get_table_path(name)
+        with open(table_path / "metadata.json", "r") as file:
+            metadata = json.load(file)
+        return metadata["primary_keys"]
+
+    def optimize(self, name: str) -> None:
+        table_path = self._get_table_path(name)
+
+        # Get metadata
+        with open(table_path / "metadata.json", "r") as file:
+            metadata = json.load(file)
+
+        primary_keys = metadata["primary_keys"]
+
+        # Get all parquet files
+        parquet_files = list(table_path.rglob("*.parquet"))
+
+        for file_path in parquet_files:
+            # Read the parquet file
+            df = pl.read_parquet(file_path)
+
+            # Deduplicate by primary_keys if they exist
+            if primary_keys:
+                # Keep last occurrence of each unique combination of primary_keys
+                df = df.unique(subset=primary_keys, keep="last")
+
+            df = df.sort(primary_keys)
+
+            # Overwrite the file with optimized data
+            df.write_parquet(file_path)
 
     def _deserialize_dtype(self, dtype_str: str) -> pl.DataType:
         # Map common string representations to Polars DataTypes
