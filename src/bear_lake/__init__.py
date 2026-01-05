@@ -4,6 +4,7 @@ import shutil
 import s3fs
 import os
 import glob
+from tqdm import tqdm
 
 DATABASE_PATH = ""
 CONNECTED = False
@@ -91,7 +92,9 @@ class Database:
 
         # Iterate over partition groups
         p_keys = metadata['partition_keys']
-        for p_values, group in data.group_by(p_keys):
+        partition_groups = list(data.group_by(p_keys))
+
+        for p_values, group in tqdm(partition_groups, desc="Inserting partitions", unit="partition"):
 
             # Build file path
             partition_path = table_path
@@ -139,7 +142,7 @@ class Database:
         else:
             parquet_files = glob.glob(f"{table_path}/**/*.parquet", recursive=True)
 
-        for file_path in parquet_files:
+        for file_path in tqdm(parquet_files, desc="Deleting records", unit="file"):
             # Read the parquet file
             df = pl.read_parquet(file_path, storage_options=self.storage_options)
 
@@ -260,7 +263,7 @@ class Database:
 
         primary_keys = metadata["primary_keys"]
 
-        for file_path in parquet_files:
+        for file_path in tqdm(parquet_files, desc="Optimizing partitions", unit="file"):
             # Read the parquet file
             df = pl.read_parquet(file_path, storage_options=self.storage_options)
 
