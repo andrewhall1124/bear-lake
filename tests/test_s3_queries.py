@@ -1,6 +1,6 @@
 import pytest
 import polars as pl
-from bear_lake import connect, table
+from bear_lake import connect_s3, table
 
 
 class TestS3QueryOperations:
@@ -152,19 +152,19 @@ class TestS3ConnectFunction:
     """Test the connect() helper function with S3."""
 
     def test_connect_returns_database(self, s3_db_path, s3_storage_options):
-        """Test that connect returns a Database instance for S3."""
+        """Test that connect_s3 returns a Database instance for S3."""
         from bear_lake import Database
         from bear_lake.filesystem_client import S3Client
 
-        db = connect(s3_db_path, storage_options=s3_storage_options)
+        db = connect_s3(s3_db_path, storage_options=s3_storage_options)
 
         assert isinstance(db, Database)
         assert db.path == s3_db_path
         assert isinstance(db.file_system_client, S3Client)
 
     def test_connect_sets_global_state(self, s3_db_path, s3_storage_options):
-        """Test that connect sets global state for table() function with S3."""
-        db = connect(s3_db_path, storage_options=s3_storage_options)
+        """Test that connect_s3 sets global state for table() function with S3."""
+        db = connect_s3(s3_db_path, storage_options=s3_storage_options)
 
         # Import to get updated global values
         import bear_lake
@@ -180,7 +180,7 @@ class TestS3TableFunction:
     def test_table_function_basic(self, s3_db, sample_schema, sample_data):
         """Test the table() helper function with S3."""
         # Connect first
-        db = connect(s3_db.path, storage_options=s3_db.storage_options)
+        db = connect_s3(s3_db.path, storage_options=s3_db.storage_options)
 
         # Create and populate table
         db.create(
@@ -201,7 +201,7 @@ class TestS3TableFunction:
 
     def test_table_function_with_filter(self, s3_db, sample_schema, sample_data):
         """Test using table() function with filters on S3."""
-        db = connect(s3_db.path, storage_options=s3_db.storage_options)
+        db = connect_s3(s3_db.path, storage_options=s3_db.storage_options)
 
         db.create(
             name="users",

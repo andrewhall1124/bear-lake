@@ -253,7 +253,16 @@ class Database:
             return eval(dtype_str, {"pl": pl})
 
 
-def connect(path: str, storage_options: dict[str, str] | None = None) -> Database:
+def connect(path: str) -> Database:
+    global DATABASE_PATH, CONNECTED, STORAGE_OPTIONS
+
+    DATABASE_PATH = path
+    CONNECTED = True
+    STORAGE_OPTIONS = None
+    return Database(path, storage_options=None)
+
+
+def connect_s3(path: str, storage_options: dict[str, str]) -> Database:
     global DATABASE_PATH, CONNECTED, STORAGE_OPTIONS
 
     DATABASE_PATH = path
