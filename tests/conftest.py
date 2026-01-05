@@ -2,8 +2,15 @@ import pytest
 import polars as pl
 import tempfile
 import shutil
+import os
+import uuid
 from pathlib import Path
+from dotenv import load_dotenv
 from bear_lake import Database
+
+# Load environment variables from .env file in project root
+project_root = Path(__file__).parent.parent
+load_dotenv(project_root / ".env")
 
 
 @pytest.fixture
@@ -78,3 +85,60 @@ def multi_partition_schema():
         "city": pl.String,
         "country": pl.String,
     }
+
+
+# S3 Test Fixtures
+@pytest.fixture
+def s3_storage_options():
+    """Return S3 storage options from environment variables."""
+    return {
+        "aws_access_key_id": os.getenv("ACCESS_KEY_ID"),
+        "aws_secret_access_key": os.getenv("SECRET_ACCESS_KEY"),
+        "endpoint_url": os.getenv("ENDPOINT"),
+        "region": os.getenv("REGION", "auto"),
+    }
+
+
+@pytest.fixture
+def s3_test_bucket():
+    """Return the S3 test bucket name from environment variables."""
+    bucket = os.getenv("BUCKET")
+    if not bucket:
+        pytest.skip("BUCKET not set in environment variables")
+    return bucket
+
+
+@pytest.fixture
+def s3_db_path(s3_test_bucket):
+    """Create a unique S3 path for testing."""
+    # Use UUID to create unique test path
+    test_id = str(uuid.uuid4())[:8]
+    return f"s3://{s3_test_bucket}/bear_lake_test_{test_id}"
+
+
+@pytest.fixture
+def s3_db(s3_db_path, s3_storage_options):
+    """Create a Database instance with S3 storage."""
+    # Check if credentials are available
+    if not all(s3_storage_options.values()):
+        pytest.skip("S3 credentials not available in environment variables")
+
+    db = Database(s3_db_path, storage_options=s3_storage_options)
+    yield db
+
+    # Cleanup after test - delete the test directory
+    try:
+        import s3fs
+
+        fs = s3fs.S3FileSystem(
+            key=s3_storage_options["aws_access_key_id"],
+            secret=s3_storage_options["aws_secret_access_key"],
+            endpoint_url=s3_storage_options["endpoint_url"],
+            client_kwargs={"region_name": s3_storage_options["region"]},
+        )
+        # Remove s3:// prefix for s3fs
+        path = s3_db_path.replace("s3://", "")
+        if fs.exists(path):
+            fs.rm(path, recursive=True)
+    except Exception:
+        pass  # Best effort cleanup
