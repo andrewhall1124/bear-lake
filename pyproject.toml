@@ -15,4 +15,16 @@ dependencies = [
 dev = [
     "python-dotenv>=1.2.1",
     "rich>=14.2.0",
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
 ]
