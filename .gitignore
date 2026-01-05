@@ -15,4 +15,4 @@ wheels/
 # Files
 /data.py
 /test.py
-/my_database
+/database
