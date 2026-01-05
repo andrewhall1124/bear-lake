@@ -8,10 +8,3 @@ dependencies = [
     "polars>=1.36.1",
     "pyarrow>=18.1.0",
 ]
-
-[dependency-groups]
-dev = [
-    "pytest>=9.0.2",
-    "rich>=14.2.0",
-    "yfinance>=1.0",
-]
