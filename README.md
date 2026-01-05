@@ -90,7 +90,7 @@ storage_options = {
 
 # Connect to S3 database
 url = f"s3://{os.getenv('BUCKET')}"
-db = bl.connect(path=url, storage_options=storage_options)
+db = bl.connect_s3(path=url, storage_options=storage_options)
 ```
 
 #### Usage with S3
@@ -137,10 +137,14 @@ All operations including `insert`, `query`, `delete`, `optimize`, and metadata o
 #### Database Connection
 
 ```python
+# Local file system
 db = bl.connect(path: str) -> Database
+
+# S3 storage
+db = bl.connect_s3(path: str, storage_options: dict[str, str]) -> Database
 ```
 
-Connect to a database at the specified path. Creates the directory if it doesn't exist.
+Connect to a database at the specified path. For local storage, creates the directory if it doesn't exist. For S3 storage, provide storage options with credentials and configuration.
 
 #### Creating Tables
 
